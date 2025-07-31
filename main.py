@@ -1,10 +1,13 @@
 import asyncio
+import threading
+import queue
 import PIL.Image
 import PIL.ImageDraw
 import PIL.ImageFont
 import PIL.ImageChops
 from bleak import BleakClient, BleakScanner
 from bleak.exc import BleakError
+from flask import Flask, request, jsonify
 
 # CRC8 table for message integrity
 crc8_table = [
@@ -62,6 +65,10 @@ PRINT_LATTICE = [0xAA, 0x55, 0x17, 0x38, 0x44, 0x5F, 0x5F, 0x5F, 0x44, 0x38, 0x2
 FINISH_LATTICE = [0xAA, 0x55, 0x17, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x17]
 IMG_PRINT_SPEED = [0x19]
 BLANK_SPEED = [0x05]
+
+# Global print queue and Flask app
+print_queue = queue.Queue()
+app = Flask(__name__)
 
 class CatPrinter:
     def __init__(self):
@@ -296,19 +303,152 @@ class CatPrinter:
             await self.client.disconnect()
             print("Disconnected from printer")
 
-# Simple usage example
-async def main():
-    printer = CatPrinter()
-
+# Flask API routes
+@app.route('/print/text', methods=['POST'])
+def api_print_text():
+    """API endpoint to print text"""
     try:
-        # Test printing text with larger font
-        await printer.print_text("poggers", font_size=30)
-        await printer.print_text("poggers", font_size=30)
+        data = request.get_json()
+        if not data or 'text' not in data:
+            return jsonify({'error': 'Missing text parameter'}), 400
+
+        job = {
+            'type': 'text',
+            'text': data['text'],
+            'font_size': data.get('font_size', 40),
+            'font_name': data.get('font_name'),
+            'energy': data.get('energy', 0x2EE0),
+            'feed_amount': data.get('feed_amount', 50)
+        }
+
+        print_queue.put(job)
+        queue_size = print_queue.qsize()
+
+        return jsonify({
+            'status': 'queued',
+            'message': f'Print job added to queue (position: {queue_size})'
+        })
 
     except Exception as e:
-        print(f"Error: {e}")
-    finally:
-        await printer.disconnect()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/print/image', methods=['POST'])
+def api_print_image():
+    """API endpoint to print image from file upload"""
+    try:
+        if 'image' not in request.files:
+            return jsonify({'error': 'No image file provided'}), 400
+
+        file = request.files['image']
+        if file.filename == '':
+            return jsonify({'error': 'No image file selected'}), 400
+
+        # Load image from uploaded file
+        image = PIL.Image.open(file.stream)
+
+        job = {
+            'type': 'image',
+            'image': image,
+            'energy': request.form.get('energy', 0x2EE0, type=int),
+            'feed_amount': request.form.get('feed_amount', 50, type=int)
+        }
+
+        print_queue.put(job)
+        queue_size = print_queue.qsize()
+
+        return jsonify({
+            'status': 'queued',
+            'message': f'Print job added to queue (position: {queue_size})'
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/status', methods=['GET'])
+def api_status():
+    """Get printer and queue status"""
+    return jsonify({
+        'queue_size': print_queue.qsize(),
+        'status': 'running'
+    })
+
+@app.route('/queue/clear', methods=['POST'])
+def api_clear_queue():
+    """Clear the print queue"""
+    try:
+        while not print_queue.empty():
+            print_queue.get()
+            print_queue.task_done()
+        return jsonify({'status': 'success', 'message': 'Queue cleared'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def run_flask_app():
+    """Run Flask app in a separate thread"""
+    app.run(host='0.0.0.0', port=5000, debug=False)
+
+async def process_print_queue():
+    """Process print jobs from the queue"""
+    printer = CatPrinter()
+
+    print("Print queue processor started")
+
+    while True:
+        try:
+            # Get job from queue (blocking with timeout)
+            try:
+                job = print_queue.get(timeout=1)
+            except queue.Empty:
+                await asyncio.sleep(0.1)
+                continue
+
+            print(f"Processing job: {job['type']}")
+
+            # Connect to printer if not connected
+            if not printer.client or not printer.client.is_connected:
+                await printer.connect()
+
+            # Process the job based on type
+            if job['type'] == 'text':
+                await printer.print_text(
+                    text=job['text'],
+                    font_size=job['font_size'],
+                    font_name=job['font_name'],
+                    energy=job['energy'],
+                    feed_amount=job['feed_amount']
+                )
+            elif job['type'] == 'image':
+                await printer.print_image(
+                    image_path_or_pil=job['image'],
+                    energy=job['energy'],
+                    feed_amount=job['feed_amount']
+                )
+
+            print("Job completed successfully")
+            print_queue.task_done()
+
+        except Exception as e:
+            print(f"Error processing job: {e}")
+            # Still mark task as done to prevent queue from hanging
+            try:
+                print_queue.task_done()
+            except:
+                pass
+
+            # Wait a bit before trying next job
+            await asyncio.sleep(2)
+
+async def main():
+    """Run both Flask API server and print queue processor"""
+    print("Starting Cat Printer Server...")
+
+    # Start Flask app in a separate thread
+    flask_thread = threading.Thread(target=run_flask_app, daemon=True)
+    flask_thread.start()
+    print("API server started on http://0.0.0.0:5000")
+
+    # Run the print queue processor
+    await process_print_queue()
 
 if __name__ == "__main__":
     asyncio.run(main())
