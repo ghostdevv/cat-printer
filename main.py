@@ -1,6 +1,7 @@
 import asyncio
 import threading
 import queue
+from datetime import datetime
 import PIL.Image
 import PIL.ImageDraw
 import PIL.ImageFont
@@ -192,8 +193,9 @@ class CatPrinter:
             padded.paste(image, (0, 0))
             image = padded
 
-        # Rotate 180 degrees so it comes out right-side up
-        image = image.rotate(180)
+        # Rotate 180 degrees so it comes out right-side up (unless in chat mode)
+        if not getattr(self, '_chat_mode', False):
+            image = image.rotate(180)
 
         return image
 
@@ -292,8 +294,9 @@ class CatPrinter:
         # Trim to actual content
         return self.trim_image(img)
 
-    async def print_text(self, text, font_size=40, font_name=None, energy=0x2EE0, feed_amount=50):
+    async def print_text(self, text, font_size=40, font_name=None, energy=0x2EE0, feed_amount=50, chat_mode=False):
         """Print text with specified font size"""
+        self._chat_mode = chat_mode
         text_image = self.create_text_image(text, font_size, font_name)
         await self.print_image(text_image, energy, feed_amount)
 
@@ -318,7 +321,8 @@ def api_print_text():
             'font_size': data.get('font_size', 40),
             'font_name': data.get('font_name'),
             'energy': data.get('energy', 0x2EE0),
-            'feed_amount': data.get('feed_amount', 50)
+            'feed_amount': data.get('feed_amount', 50),
+            'chat_mode': data.get('chat_mode', False)
         }
 
         print_queue.put(job)
@@ -359,6 +363,42 @@ def api_print_image():
         return jsonify({
             'status': 'queued',
             'message': f'Print job added to queue (position: {queue_size})'
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/print/chat', methods=['POST'])
+def api_print_chat():
+    """API endpoint optimized for chat messages with timestamps"""
+    try:
+        data = request.get_json()
+        if not data or 'message' not in data:
+            return jsonify({'error': 'Missing message parameter'}), 400
+
+        # Add timestamp if requested
+        message = data['message']
+        if data.get('include_timestamp', True):
+            timestamp = datetime.now().strftime('%H:%M')
+            message = f"[{timestamp}] {message}"
+
+        job = {
+            'type': 'text',
+            'text': message,
+            'font_size': data.get('font_size', 30),  # Smaller default for chat
+            'font_name': data.get('font_name'),
+            'energy': data.get('energy', 0x2EE0),
+            'feed_amount': data.get('feed_amount', 30),  # Less paper feed for chat
+            'chat_mode': True  # Always use chat mode
+        }
+
+        print_queue.put(job)
+        queue_size = print_queue.qsize()
+
+        return jsonify({
+            'status': 'queued',
+            'message': f'Chat message added to queue (position: {queue_size})',
+            'timestamp': datetime.now().isoformat()
         })
 
     except Exception as e:
@@ -415,7 +455,8 @@ async def process_print_queue():
                     font_size=job['font_size'],
                     font_name=job['font_name'],
                     energy=job['energy'],
-                    feed_amount=job['feed_amount']
+                    feed_amount=job['feed_amount'],
+                    chat_mode=job['chat_mode']
                 )
             elif job['type'] == 'image':
                 await printer.print_image(
