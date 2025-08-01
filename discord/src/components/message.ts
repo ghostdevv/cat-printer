@@ -7,7 +7,7 @@ export default event({
 		if (message.author.bot) return;
 		if (message.channelId != '1400529692225703966') return;
 
-		const text = `${format(message.createdTimestamp, 'yyyy-MM-dd HH:mm:ss')}\n${message.author.displayName}:\n${message.content.slice(0, 100)}`;
+		const text = `${format(message.createdTimestamp, 'yyyy-MM-dd HH:mm:ss')}\n${message.author.displayName}:\n${message.content}`;
 
 		console.log(text);
 
