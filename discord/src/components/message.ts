@@ -11,15 +11,24 @@ export default event({
 
 		console.log(text);
 
-		await fetch('http://127.0.0.1:5000/print/text', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({
-				font_size: 30,
-				text,
-			}),
-		});
+		try {
+			const res = await fetch('http://127.0.0.1:5000/print/text', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					font_size: 30,
+					chat_mode: true,
+					text,
+				}),
+			});
+
+			if (!res.ok) {
+				throw new Error('Failed to print message');
+			}
+
+			await message.react('✅');
+		} catch {}
 	},
 });
