@@ -64,7 +64,7 @@ SET_ENERGY = 0xAF
 # Constants
 PRINT_LATTICE = [0xAA, 0x55, 0x17, 0x38, 0x44, 0x5F, 0x5F, 0x5F, 0x44, 0x38, 0x2C]
 FINISH_LATTICE = [0xAA, 0x55, 0x17, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x17]
-IMG_PRINT_SPEED = [0x19]
+IMG_PRINT_SPEED = [0x05]
 BLANK_SPEED = [0x05]
 
 # Global print queue and Flask app
@@ -155,7 +155,7 @@ class CatPrinter:
         await self.send_command(DRAWING_MODE, [0])
         await self.send_command(OTHER_FEED_PAPER, IMG_PRINT_SPEED)
 
-    async def finish_printing(self, feed_amount=50):
+    async def finish_printing(self, feed_amount=20):
         """Finish printing and feed paper"""
         await self.send_command(OTHER_FEED_PAPER, BLANK_SPEED)
         if feed_amount > 0:
@@ -199,7 +199,7 @@ class CatPrinter:
 
         return image
 
-    async def print_image(self, image_path_or_pil, energy=0x2EE0, feed_amount=50):
+    async def print_image(self, image_path_or_pil, energy=0x2EE0, feed_amount=20):
         """Print an image"""
         if not self.client or not self.client.is_connected:
             await self.connect()
@@ -294,7 +294,7 @@ class CatPrinter:
         # Trim to actual content
         return self.trim_image(img)
 
-    async def print_text(self, text, font_size=40, font_name=None, energy=0x2EE0, feed_amount=50, chat_mode=False):
+    async def print_text(self, text, font_size=40, font_name=None, energy=0x2EE0, feed_amount=20, chat_mode=False):
         """Print text with specified font size"""
         self._chat_mode = chat_mode
         text_image = self.create_text_image(text, font_size, font_name)
