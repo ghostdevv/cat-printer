@@ -9,6 +9,7 @@ import PIL.ImageChops
 from bleak import BleakClient, BleakScanner
 from bleak.exc import BleakError
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 
 # CRC8 table for message integrity
 crc8_table = [
@@ -70,6 +71,7 @@ BLANK_SPEED = [0x05]
 # Global print queue and Flask app
 print_queue = queue.Queue()
 app = Flask(__name__)
+CORS(app)
 
 class CatPrinter:
     def __init__(self):

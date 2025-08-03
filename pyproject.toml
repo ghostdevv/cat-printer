@@ -7,5 +7,6 @@ requires-python = ">=3.13"
 dependencies = [
     "bleak>=1.0.1",
     "flask>=3.1.1",
+    "flask-cors>=6.0.1",
     "pillow>=11.3.0",
 ]
