@@ -1,0 +1,15 @@
+[Unit]
+Description=Cat Printer Service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/dev/cat-printer
+ExecStart=/usr/bin/just run
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
