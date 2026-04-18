@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=%h/dev/cat-printer
+WorkingDirectory=%h/vendor/cat-printer
 ExecStart=/usr/bin/just run
 Restart=on-failure
 RestartSec=5
