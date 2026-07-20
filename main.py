@@ -181,19 +181,13 @@ class CatPrinter:
                 background.paste(image, mask=image.split()[-1])
             image = background
 
-        # Resize if too wide
-        if image.width > PRINTER_WIDTH:
+        # Scale to full printer width, maintaining aspect ratio
+        if image.width != PRINTER_WIDTH:
             height = int(image.height * (PRINTER_WIDTH / image.width))
-            image = image.resize((PRINTER_WIDTH, height))
+            image = image.resize((PRINTER_WIDTH, height), PIL.Image.LANCZOS)
 
         # Convert to 1-bit black and white
-        image = image.convert('1')
-
-        # Pad to printer width if needed
-        if image.width < PRINTER_WIDTH:
-            padded = PIL.Image.new('1', (PRINTER_WIDTH, image.height), 1)
-            padded.paste(image, (0, 0))
-            image = padded
+        image = image.convert("1")
 
         # Rotate 180 degrees so it comes out right-side up (unless in chat mode)
         if not getattr(self, '_chat_mode', False):
@@ -350,7 +344,11 @@ def api_print_image():
             return jsonify({'error': 'No image file selected'}), 400
 
         # Load image from uploaded file
+        # Call .load() to force PIL to read all pixel data while the
+        # request stream is still open; without this the stream closes
+        # before the queue processor runs.
         image = PIL.Image.open(file.stream)
+        image.load()
 
         job = {
             'type': 'image',
